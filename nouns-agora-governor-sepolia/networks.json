@@ -1,0 +1,12 @@
+{
+  "sepolia": {
+    "NounsTokenSepolia": {
+      "address": "0x4C4674bb72a096855496a7204962297bd7e12b85",
+      "startBlock": 3594846
+    },
+    "NounsAgoraGovernorSepolia": {
+      "address": "0x5Cef0380cE0aD3DAEefef8bDb85dBDeD7965adf9",
+      "startBlock": 4548812
+    }
+  }
+}
