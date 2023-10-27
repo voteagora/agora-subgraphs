@@ -24,7 +24,7 @@ export function handleInitialized(event: Initialized): void {
   // https://github.com/voteagora/agora-governor/blob/main/src/AgoraNounsGovernor.sol
 
   let standardDroposalType = new DroposalType(
-    event.transaction.hash.concatI32(event.logIndex.toI32() + 1)
+    event.transaction.hash.concatI32(event.logIndex.toI32())
   );
   standardDroposalType.name = "Standard";
   standardDroposalType.editionSize = BigInt.fromI32(1000);
