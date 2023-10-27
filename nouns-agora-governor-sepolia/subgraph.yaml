@@ -14,53 +14,20 @@ dataSources:
       apiVersion: 0.0.7
       language: wasm/assemblyscript
       entities:
-        - Approval
-        - ApprovalForAll
         - DelegateChanged
         - DelegateVotesChanged
-        - DescriptorLocked
-        - DescriptorUpdated
-        - MinterLocked
-        - MinterUpdated
-        - NounBurned
         - NounCreated
-        - NoundersDAOUpdated
-        - OwnershipTransferred
-        - SeederLocked
-        - SeederUpdated
         - Transfer
       abis:
         - name: NounsTokenSepolia
           file: ./abis/NounsTokenSepolia.json
       eventHandlers:
-        - event: Approval(indexed address,indexed address,indexed uint256)
-          handler: handleApproval
-        - event: ApprovalForAll(indexed address,indexed address,bool)
-          handler: handleApprovalForAll
         - event: DelegateChanged(indexed address,indexed address,indexed address)
           handler: handleDelegateChanged
         - event: DelegateVotesChanged(indexed address,uint256,uint256)
           handler: handleDelegateVotesChanged
-        - event: DescriptorLocked()
-          handler: handleDescriptorLocked
-        - event: DescriptorUpdated(address)
-          handler: handleDescriptorUpdated
-        - event: MinterLocked()
-          handler: handleMinterLocked
-        - event: MinterUpdated(address)
-          handler: handleMinterUpdated
-        - event: NounBurned(indexed uint256)
-          handler: handleNounBurned
         - event: NounCreated(indexed uint256,(uint48,uint48,uint48,uint48,uint48))
           handler: handleNounCreated
-        - event: NoundersDAOUpdated(address)
-          handler: handleNoundersDAOUpdated
-        - event: OwnershipTransferred(indexed address,indexed address)
-          handler: handleOwnershipTransferred
-        - event: SeederLocked()
-          handler: handleSeederLocked
-        - event: SeederUpdated(address)
-          handler: handleSeederUpdated
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
       file: ./src/nouns-token-sepolia.ts
@@ -76,56 +43,23 @@ dataSources:
       apiVersion: 0.0.7
       language: wasm/assemblyscript
       entities:
-        - AdminChanged
-        - BeaconUpgraded
-        - DroposalTypeApproved
-        - DroposalTypeProposed
-        - DroposalTypeSet
         - Initialized
-        - NounsAgoraGovernorSepoliaOwnershipTransferred
         - ProposalCanceled
         - ProposalCreated
         - ProposalExecuted
-        - ProposalThresholdSet
-        - Upgraded
         - VoteCast
-        - VoteCastWithParams
-        - VotingDelaySet
-        - VotingPeriodSet
       abis:
         - name: NounsAgoraGovernorSepolia
           file: ./abis/NounsAgoraGovernorSepolia.json
       eventHandlers:
-        - event: AdminChanged(address,address)
-          handler: handleAdminChanged
-        - event: BeaconUpgraded(indexed address)
-          handler: handleBeaconUpgraded
-        - event: DroposalTypeApproved(uint256)
-          handler: handleDroposalTypeApproved
-        - event: DroposalTypeProposed(uint256,(string,uint64,uint96,uint64,uint32,address))
-          handler: handleDroposalTypeProposed
-        - event: DroposalTypeSet(uint256,(string,uint64,uint96,uint64,uint32,address))
-          handler: handleDroposalTypeSet
         - event: Initialized(uint8)
           handler: handleInitialized
-        - event: OwnershipTransferred(indexed address,indexed address)
-          handler: handleOwnershipTransferred
         - event: ProposalCanceled(uint256)
           handler: handleProposalCanceled
         - event: ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)
           handler: handleProposalCreated
         - event: ProposalExecuted(uint256)
           handler: handleProposalExecuted
-        - event: ProposalThresholdSet(uint256,uint256)
-          handler: handleProposalThresholdSet
-        - event: Upgraded(indexed address)
-          handler: handleUpgraded
         - event: VoteCast(indexed address,uint256,uint8,uint256,string)
           handler: handleVoteCast
-        - event: VoteCastWithParams(indexed address,uint256,uint8,uint256,string,bytes)
-          handler: handleVoteCastWithParams
-        - event: VotingDelaySet(uint256,uint256)
-          handler: handleVotingDelaySet
-        - event: VotingPeriodSet(uint256,uint256)
-          handler: handleVotingPeriodSet
       file: ./src/nouns-agora-governor-sepolia.ts
