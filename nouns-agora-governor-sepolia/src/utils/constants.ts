@@ -1,3 +1,5 @@
+// Mix of Nouns and OZ style constants
+
 import { BigDecimal, BigInt } from "@graphprotocol/graph-ts";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -5,6 +7,7 @@ export const BIGINT_ZERO = BigInt.fromI32(0);
 export const BIGINT_ONE = BigInt.fromI32(1);
 export const BIGINT_FIVE = BigInt.fromI32(5);
 export const BIGINT_HUNDRED = BigInt.fromI32(100);
+export const BIGINT_10K = BigInt.fromI32(10000);
 export const BIGDECIMAL_ZERO = new BigDecimal(BIGINT_ZERO);
 
 export const GOVERNANCE_NAME = "OZGovernor";
@@ -12,7 +15,14 @@ export namespace GovernanceFrameworkType {
   export const OPENZEPPELIN_GOVERNOR = "OZGovernor";
 }
 
-export namespace ProposalState {
+export const NOUNS_STATUS_PENDING = "PENDING";
+export const NOUNS_STATUS_CANCELLED = "CANCELLED";
+export const NOUNS_STATUS_VETOED = "VETOED";
+export const NOUNS_STATUS_EXECUTED = "EXECUTED";
+export const NOUNS_STATUS_QUEUED = "QUEUED";
+export const NOUNS_STATUS_ACTIVE = "ACTIVE";
+
+export namespace DroposalState {
   export const PENDING = "PENDING";
   export const ACTIVE = "ACTIVE";
   export const CANCELED = "CANCELED";
