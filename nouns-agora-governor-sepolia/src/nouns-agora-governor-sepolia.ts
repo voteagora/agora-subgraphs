@@ -1,6 +1,6 @@
 // TODO Fix Quorum
 
-import { Address, BigInt } from "@graphprotocol/graph-ts";
+import { Address, BigDecimal, BigInt } from "@graphprotocol/graph-ts";
 import {
   NounsAgoraGovernorSepolia,
   ProposalCanceled,
@@ -20,30 +20,38 @@ import { Droposal, DroposalType } from "../generated/schema";
 import { DroposalState } from "./utils/constants";
 
 export function handleInitialized(event: Initialized): void {
+  // You can find the two default setup here
+  // https://github.com/voteagora/agora-governor/blob/main/src/AgoraNounsGovernor.sol
+
   let standardDroposalType = new DroposalType(
     event.transaction.hash.concatI32(event.logIndex.toI32() + 1)
   );
   standardDroposalType.name = "Standard";
+  standardDroposalType.editionSize = BigInt.fromI32(1000);
+  standardDroposalType.publicSalePrice = BigInt.fromString(
+    "30000000000000000"
+  ).toBigDecimal();
+  standardDroposalType.publicSaleDuration = 3 * 24 * 60 * 60;
+  standardDroposalType.fundsRecipientSplit = BigDecimal.fromString("0.4");
+  standardDroposalType.blockNumber = event.block.number;
+  standardDroposalType.blockTimestamp = event.block.timestamp;
+  standardDroposalType.transactionHash = event.transaction.hash;
   standardDroposalType.save();
 
   let premiumDroposalType = new DroposalType(
     event.transaction.hash.concatI32(event.logIndex.toI32() + 1)
   );
   premiumDroposalType.name = "Premium";
+  premiumDroposalType.editionSize = BigInt.fromI32(3000);
+  standardDroposalType.publicSalePrice = BigInt.fromString(
+    "69000000000000000"
+  ).toBigDecimal();
+  premiumDroposalType.publicSaleDuration = 2 * 24 * 60 * 60;
+  premiumDroposalType.fundsRecipientSplit = BigDecimal.fromString("0.3");
+  premiumDroposalType.blockNumber = event.block.number;
+  premiumDroposalType.blockTimestamp = event.block.timestamp;
+  premiumDroposalType.transactionHash = event.transaction.hash;
   premiumDroposalType.save();
-
-  // TODO flesh out the other objectives
-  //   entity.droposalTypeId = event.params.droposalTypeId;
-  //   entity.config_name = event.params.config.name;
-  //   entity.config_editionSize = event.params.config.editionSize;
-  //   entity.config_publicSalePrice = event.params.config.publicSalePrice;
-  //   entity.config_publicSaleDuration = event.params.config.publicSaleDuration;
-  //   entity.config_fundsRecipientSplit = event.params.config.fundsRecipientSplit;
-  //   entity.config_minter = event.params.config.minter;
-  //   entity.blockNumber = event.block.number;
-  //   entity.blockTimestamp = event.block.timestamp;
-  //   entity.transactionHash = event.transaction.hash;
-  //   entity.save();
 }
 
 export function handleProposalCanceled(event: ProposalCanceled): void {

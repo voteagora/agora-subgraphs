@@ -9,6 +9,7 @@ export const BIGINT_FIVE = BigInt.fromI32(5);
 export const BIGINT_HUNDRED = BigInt.fromI32(100);
 export const BIGINT_10K = BigInt.fromI32(10000);
 export const BIGDECIMAL_ZERO = new BigDecimal(BIGINT_ZERO);
+export const FIXED_PRICE_MINTER_ADDRESS = "0x04E2516A2c207E84a1839755675dfd8eF6302F0a";
 
 export const GOVERNANCE_NAME = "OZGovernor";
 export namespace GovernanceFrameworkType {

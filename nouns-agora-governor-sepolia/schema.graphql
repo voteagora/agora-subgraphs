@@ -2,10 +2,10 @@
 type DroposalType @entity(immutable: true) {
   id: Bytes!
   name: String!
-  editionSize: BigInt! # uint64
-  publicSalePrice: BigInt! # uint96
-  publicSaleDuration: BigInt! # uint64
-  fundsRecipientSplit: BigInt! # uint32
+  editionSize: BigInt!
+  publicSalePrice: BigDecimal!
+  publicSaleDuration: Int!
+  fundsRecipientSplit: BigDecimal!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
