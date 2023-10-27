@@ -1,246 +1,259 @@
+import { log } from "@graphprotocol/graph-ts";
 import {
-  Approval as ApprovalEvent,
-  ApprovalForAll as ApprovalForAllEvent,
-  DelegateChanged as DelegateChangedEvent,
-  DelegateVotesChanged as DelegateVotesChangedEvent,
-  DescriptorLocked as DescriptorLockedEvent,
-  DescriptorUpdated as DescriptorUpdatedEvent,
-  MinterLocked as MinterLockedEvent,
-  MinterUpdated as MinterUpdatedEvent,
-  NounBurned as NounBurnedEvent,
-  NounCreated as NounCreatedEvent,
-  NoundersDAOUpdated as NoundersDAOUpdatedEvent,
-  OwnershipTransferred as OwnershipTransferredEvent,
-  SeederLocked as SeederLockedEvent,
-  SeederUpdated as SeederUpdatedEvent,
-  Transfer as TransferEvent,
-} from "../generated/NounsTokenSepolia/NounsTokenSepolia";
-import {
-  Approval,
-  ApprovalForAll,
   DelegateChanged,
   DelegateVotesChanged,
-  DescriptorLocked,
-  DescriptorUpdated,
-  MinterLocked,
-  MinterUpdated,
-  NounBurned,
   NounCreated,
-  NoundersDAOUpdated,
-  OwnershipTransferred,
-  SeederLocked,
-  SeederUpdated,
   Transfer,
+} from "../generated/NounsTokenSepolia/NounsTokenSepolia";
+import {
+  Noun,
+  Seed,
+  DelegationEvent,
+  TransferEvent,
 } from "../generated/schema";
+import { BIGINT_ONE, BIGINT_ZERO, ZERO_ADDRESS } from "./utils/constants";
+import {
+  getGovernanceEntity,
+  getOrCreateDelegate,
+  getOrCreateAccount,
+} from "./utils/nounsHelpers";
 
-export function handleApproval(event: ApprovalEvent): void {
-  let entity = new Approval(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.owner = event.params.owner;
-  entity.approved = event.params.approved;
-  entity.tokenId = event.params.tokenId;
+export function handleNounCreated(event: NounCreated): void {
+  let nounId = event.params.tokenId.toString();
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  let seed = new Seed(nounId);
+  seed.background = event.params.seed.background;
+  seed.body = event.params.seed.body;
+  seed.accessory = event.params.seed.accessory;
+  seed.head = event.params.seed.head;
+  seed.glasses = event.params.seed.glasses;
+  seed.save();
 
-  entity.save();
+  let noun = Noun.load(nounId);
+  if (noun == null) {
+    log.error("[handleNounCreated] Noun #{} not found. Hash: {}", [
+      nounId,
+      event.transaction.hash.toHex(),
+    ]);
+    return;
+  }
+
+  noun.seed = seed.id;
+  noun.save();
 }
 
-export function handleApprovalForAll(event: ApprovalForAllEvent): void {
-  let entity = new ApprovalForAll(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+// Use WebAssembly global due to lack of closure support
+let accountNouns: string[] = [];
+
+export function handleDelegateChanged(event: DelegateChanged): void {
+  let tokenHolder = getOrCreateAccount(event.params.delegator.toHexString());
+  let previousDelegate = getOrCreateDelegate(
+    event.params.fromDelegate.toHexString()
   );
-  entity.owner = event.params.owner;
-  entity.operator = event.params.operator;
-  entity.approved = event.params.approved;
+  let newDelegate = getOrCreateDelegate(event.params.toDelegate.toHexString());
+  accountNouns = tokenHolder.nouns;
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  tokenHolder.delegate = newDelegate.id;
+  tokenHolder.save();
 
-  entity.save();
+  previousDelegate.tokenHoldersRepresentedAmount =
+    previousDelegate.tokenHoldersRepresentedAmount - 1;
+  let previousNounsRepresented = previousDelegate.nounsRepresented; // Re-assignment required to update array
+  previousDelegate.nounsRepresented = previousNounsRepresented.filter(
+    (n) => !accountNouns.includes(n)
+  );
+  newDelegate.tokenHoldersRepresentedAmount =
+    newDelegate.tokenHoldersRepresentedAmount + 1;
+  let newNounsRepresented = newDelegate.nounsRepresented; // Re-assignment required to update array
+  for (let i = 0; i < accountNouns.length; i++) {
+    newNounsRepresented.push(accountNouns[i]);
+  }
+  newDelegate.nounsRepresented = newNounsRepresented;
+  previousDelegate.save();
+  newDelegate.save();
+
+  // Log a transfer event for each Noun
+  for (let i = 0; i < accountNouns.length; i++) {
+    let delegateChangedEvent = new DelegationEvent(
+      event.transaction.hash.toHexString() + "_" + accountNouns[i]
+    );
+    delegateChangedEvent.blockNumber = event.block.number;
+    delegateChangedEvent.blockTimestamp = event.block.timestamp;
+    delegateChangedEvent.noun = accountNouns[i];
+    delegateChangedEvent.previousDelegate = previousDelegate.id
+      ? previousDelegate.id
+      : tokenHolder.id;
+    delegateChangedEvent.newDelegate = newDelegate.id
+      ? newDelegate.id
+      : tokenHolder.id;
+    delegateChangedEvent.save();
+  }
 }
 
-export function handleDelegateChanged(event: DelegateChangedEvent): void {
-  let entity = new DelegateChanged(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+export function handleDelegateVotesChanged(event: DelegateVotesChanged): void {
+  let governance = getGovernanceEntity();
+  let delegate = getOrCreateDelegate(event.params.delegate.toHexString());
+  let votesDifference = event.params.newBalance.minus(
+    event.params.previousBalance
   );
-  entity.delegator = event.params.delegator;
-  entity.fromDelegate = event.params.fromDelegate;
-  entity.toDelegate = event.params.toDelegate;
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  delegate.delegatedVotesRaw = event.params.newBalance;
+  delegate.delegatedVotes = event.params.newBalance;
+  delegate.save();
 
-  entity.save();
+  if (
+    event.params.previousBalance == BIGINT_ZERO &&
+    event.params.newBalance > BIGINT_ZERO
+  ) {
+    governance.currentDelegates = governance.currentDelegates.plus(BIGINT_ONE);
+  }
+  if (event.params.newBalance == BIGINT_ZERO) {
+    governance.currentDelegates = governance.currentDelegates.minus(BIGINT_ONE);
+  }
+  governance.delegatedVotesRaw = governance.delegatedVotesRaw.plus(
+    votesDifference
+  );
+  governance.delegatedVotes = governance.delegatedVotesRaw;
+  governance.save();
 }
 
-export function handleDelegateVotesChanged(
-  event: DelegateVotesChangedEvent
-): void {
-  let entity = new DelegateVotesChanged(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+let transferredNounId: string; // Use WebAssembly global due to lack of closure support
+export function handleTransfer(event: Transfer): void {
+  let fromHolder = getOrCreateAccount(event.params.from.toHexString());
+  let toHolder = getOrCreateAccount(event.params.to.toHexString());
+  let governance = getGovernanceEntity();
+  transferredNounId = event.params.tokenId.toString();
+
+  let transferEvent = new TransferEvent(
+    event.transaction.hash.toHexString() + "_" + transferredNounId
   );
-  entity.delegate = event.params.delegate;
-  entity.previousBalance = event.params.previousBalance;
-  entity.newBalance = event.params.newBalance;
+  transferEvent.blockNumber = event.block.number;
+  transferEvent.blockTimestamp = event.block.timestamp;
+  transferEvent.noun = event.params.tokenId.toString();
+  transferEvent.previousHolder = fromHolder.id.toString();
+  transferEvent.newHolder = toHolder.id.toString();
+  transferEvent.save();
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  // fromHolder
+  if (event.params.from.toHexString() == ZERO_ADDRESS) {
+    governance.totalTokenHolders = governance.totalTokenHolders.plus(
+      BIGINT_ONE
+    );
+    governance.save();
+  } else {
+    let fromHolderPreviousBalance = fromHolder.tokenBalanceRaw;
+    fromHolder.tokenBalanceRaw = fromHolder.tokenBalanceRaw.minus(BIGINT_ONE);
+    fromHolder.tokenBalance = fromHolder.tokenBalanceRaw;
+    let fromHolderNouns = fromHolder.nouns; // Re-assignment required to update array
+    fromHolder.nouns = fromHolderNouns.filter((n) => n != transferredNounId);
 
-  entity.save();
-}
+    if (fromHolder.delegate != null) {
+      let fromHolderDelegate = getOrCreateDelegate(
+        fromHolder.delegate as string
+      );
+      let fromHolderNounsRepresented = fromHolderDelegate.nounsRepresented; // Re-assignment required to update array
+      fromHolderDelegate.nounsRepresented = fromHolderNounsRepresented.filter(
+        (n) => n != transferredNounId
+      );
+      fromHolderDelegate.save();
+    }
 
-export function handleDescriptorLocked(event: DescriptorLockedEvent): void {
-  let entity = new DescriptorLocked(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+    if (fromHolder.tokenBalanceRaw < BIGINT_ZERO) {
+      log.error("Negative balance on holder {} with balance {}", [
+        fromHolder.id,
+        fromHolder.tokenBalanceRaw.toString(),
+      ]);
+    }
+
+    if (
+      fromHolder.tokenBalanceRaw == BIGINT_ZERO &&
+      fromHolderPreviousBalance > BIGINT_ZERO
+    ) {
+      governance.currentTokenHolders = governance.currentTokenHolders.minus(
+        BIGINT_ONE
+      );
+      governance.save();
+
+      fromHolder.delegate = null;
+    } else if (
+      fromHolder.tokenBalanceRaw > BIGINT_ZERO &&
+      fromHolderPreviousBalance == BIGINT_ZERO
+    ) {
+      governance.currentTokenHolders = governance.currentTokenHolders.plus(
+        BIGINT_ONE
+      );
+      governance.save();
+    }
+
+    fromHolder.save();
+  }
+
+  // toHolder
+  if (event.params.to.toHexString() == ZERO_ADDRESS) {
+    governance.totalTokenHolders = governance.totalTokenHolders.minus(
+      BIGINT_ONE
+    );
+    governance.save();
+  }
+
+  let delegateChangedEvent = new DelegationEvent(
+    event.transaction.hash.toHexString() + "_" + event.params.tokenId.toString()
   );
+  delegateChangedEvent.blockNumber = event.block.number;
+  delegateChangedEvent.blockTimestamp = event.block.timestamp;
+  delegateChangedEvent.noun = event.params.tokenId.toString();
+  delegateChangedEvent.previousDelegate = fromHolder.delegate
+    ? fromHolder.delegate!.toString()
+    : fromHolder.id.toString();
+  delegateChangedEvent.newDelegate = toHolder.delegate
+    ? toHolder.delegate!.toString()
+    : toHolder.id.toString();
+  delegateChangedEvent.save();
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleDescriptorUpdated(event: DescriptorUpdatedEvent): void {
-  let entity = new DescriptorUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
+  let toHolderDelegate = getOrCreateDelegate(
+    toHolder.delegate ? toHolder.delegate! : toHolder.id
   );
-  entity.descriptor = event.params.descriptor;
+  let toHolderNounsRepresented = toHolderDelegate.nounsRepresented; // Re-assignment required to update array
+  toHolderNounsRepresented.push(transferredNounId);
+  toHolderDelegate.nounsRepresented = toHolderNounsRepresented;
+  toHolderDelegate.save();
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  let toHolderPreviousBalance = toHolder.tokenBalanceRaw;
+  toHolder.tokenBalanceRaw = toHolder.tokenBalanceRaw.plus(BIGINT_ONE);
+  toHolder.tokenBalance = toHolder.tokenBalanceRaw;
+  toHolder.totalTokensHeldRaw = toHolder.totalTokensHeldRaw.plus(BIGINT_ONE);
+  toHolder.totalTokensHeld = toHolder.totalTokensHeldRaw;
+  let toHolderNouns = toHolder.nouns; // Re-assignment required to update array
+  toHolderNouns.push(event.params.tokenId.toString());
+  toHolder.nouns = toHolderNouns;
 
-  entity.save();
-}
+  if (
+    toHolder.tokenBalanceRaw == BIGINT_ZERO &&
+    toHolderPreviousBalance > BIGINT_ZERO
+  ) {
+    governance.currentTokenHolders = governance.currentTokenHolders.minus(
+      BIGINT_ONE
+    );
+    governance.save();
+  } else if (
+    toHolder.tokenBalanceRaw > BIGINT_ZERO &&
+    toHolderPreviousBalance == BIGINT_ZERO
+  ) {
+    governance.currentTokenHolders = governance.currentTokenHolders.plus(
+      BIGINT_ONE
+    );
+    governance.save();
 
-export function handleMinterLocked(event: MinterLockedEvent): void {
-  let entity = new MinterLocked(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
+    toHolder.delegate = toHolder.id;
+  }
 
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
+  let noun = Noun.load(transferredNounId);
+  if (noun == null) {
+    noun = new Noun(transferredNounId);
+  }
 
-  entity.save();
-}
+  noun.owner = toHolder.id;
+  noun.save();
 
-export function handleMinterUpdated(event: MinterUpdatedEvent): void {
-  let entity = new MinterUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.minter = event.params.minter;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleNounBurned(event: NounBurnedEvent): void {
-  let entity = new NounBurned(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.tokenId = event.params.tokenId;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleNounCreated(event: NounCreatedEvent): void {
-  let entity = new NounCreated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.tokenId = event.params.tokenId;
-  entity.seed_background = event.params.seed.background;
-  entity.seed_body = event.params.seed.body;
-  entity.seed_accessory = event.params.seed.accessory;
-  entity.seed_head = event.params.seed.head;
-  entity.seed_glasses = event.params.seed.glasses;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleNoundersDAOUpdated(event: NoundersDAOUpdatedEvent): void {
-  let entity = new NoundersDAOUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.noundersDAO = event.params.noundersDAO;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleOwnershipTransferred(
-  event: OwnershipTransferredEvent
-): void {
-  let entity = new OwnershipTransferred(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.previousOwner = event.params.previousOwner;
-  entity.newOwner = event.params.newOwner;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleSeederLocked(event: SeederLockedEvent): void {
-  let entity = new SeederLocked(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleSeederUpdated(event: SeederUpdatedEvent): void {
-  let entity = new SeederUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.seeder = event.params.seeder;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
-}
-
-export function handleTransfer(event: TransferEvent): void {
-  let entity = new Transfer(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  );
-  entity.from = event.params.from;
-  entity.to = event.params.to;
-  entity.tokenId = event.params.tokenId;
-
-  entity.blockNumber = event.block.number;
-  entity.blockTimestamp = event.block.timestamp;
-  entity.transactionHash = event.transaction.hash;
-
-  entity.save();
+  toHolder.save();
 }

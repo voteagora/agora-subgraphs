@@ -1,53 +1,63 @@
+// TODO Fix Quorum
+
 import { Address, BigInt } from "@graphprotocol/graph-ts";
 import {
+  NounsAgoraGovernorSepolia,
   ProposalCanceled,
   ProposalCreated,
   ProposalExecuted,
-  DroposalTypeApproved,
   VoteCast,
+  Initialized,
 } from "../generated/NounsAgoraGovernorSepolia/NounsAgoraGovernorSepolia";
 import {
-  _handleProposalCreated,
-  _handleProposalCanceled,
-  _handleProposalExecuted,
-  _handleVoteCast,
-  getProposal,
-  getGovernance,
+  _handleDroposalCreated,
+  _handleDroposalCanceled,
+  _handleDroposalExecuted,
+  _handleDroposalVoteCast,
+  getDroposal,
 } from "./handlers";
-import { GovernanceFramework, Proposal } from "../generated/schema";
-import { NounsAgoraGovernorSepolia } from "../generated/NounsAgoraGovernorSepolia/NounsAgoraGovernorSepolia";
-import {
-  BIGINT_ONE,
-  GovernanceFrameworkType,
-  ProposalState,
-} from "./constants";
+import { Droposal, DroposalType } from "../generated/schema";
+import { DroposalState } from "./utils/constants";
 
-// export function handleDroposalTypeApproved(
-//   event: DroposalTypeApprovedEvent
-// ): void {
-//   let entity = new DroposalTypeApproved(
-//     event.transaction.hash.concatI32(event.logIndex.toI32())
-//   );
-//   entity.droposalTypeId = event.params.droposalTypeId;
+export function handleInitialized(event: Initialized): void {
+  let standardDroposalType = new DroposalType(
+    event.transaction.hash.concatI32(event.logIndex.toI32() + 1)
+  );
+  standardDroposalType.name = "Standard";
+  standardDroposalType.save();
 
-//   entity.blockNumber = event.block.number;
-//   entity.blockTimestamp = event.block.timestamp;
-//   entity.transactionHash = event.transaction.hash;
+  let premiumDroposalType = new DroposalType(
+    event.transaction.hash.concatI32(event.logIndex.toI32() + 1)
+  );
+  premiumDroposalType.name = "Premium";
+  premiumDroposalType.save();
 
-//   entity.save();
-// }
-
-export function handleProposalCanceled(event: ProposalCanceled): void {
-  _handleProposalCanceled(event.params.proposalId.toString(), event);
+  // TODO flesh out the other objectives
+  //   entity.droposalTypeId = event.params.droposalTypeId;
+  //   entity.config_name = event.params.config.name;
+  //   entity.config_editionSize = event.params.config.editionSize;
+  //   entity.config_publicSalePrice = event.params.config.publicSalePrice;
+  //   entity.config_publicSaleDuration = event.params.config.publicSaleDuration;
+  //   entity.config_fundsRecipientSplit = event.params.config.fundsRecipientSplit;
+  //   entity.config_minter = event.params.config.minter;
+  //   entity.blockNumber = event.block.number;
+  //   entity.blockTimestamp = event.block.timestamp;
+  //   entity.transactionHash = event.transaction.hash;
+  //   entity.save();
 }
 
-export function handleProposalCreated(event: ProposalCreated): void {
-  const quorumVotes = getQuorumFromContract(
-    event.address,
-    event.block.number.minus(BIGINT_ONE)
-  );
+export function handleProposalCanceled(event: ProposalCanceled): void {
+  _handleDroposalCanceled(event.params.proposalId.toString(), event);
+}
 
-  _handleProposalCreated(
+// Handle the Proposal ie: Droposal Created event from the Nouns
+// Agora Governor
+export function handleProposalCreated(event: ProposalCreated): void {
+  // Pull quorum from the NounsAgoraGovernor
+  const contract = NounsAgoraGovernorSepolia.bind(event.address);
+  const quorumVotes = contract.quorum(event.block.number);
+
+  _handleDroposalCreated(
     event.params.proposalId.toString(),
     event.params.proposer.toHexString(),
     event.params.targets,
@@ -64,19 +74,20 @@ export function handleProposalCreated(event: ProposalCreated): void {
 
 // ProposalExecuted(proposalId)
 export function handleProposalExecuted(event: ProposalExecuted): void {
-  _handleProposalExecuted(event.params.proposalId.toString(), event);
+  _handleDroposalExecuted(event.params.proposalId.toString(), event);
 }
 
 // VoteCast(account, proposalId, support, weight, reason);
 export function handleVoteCast(event: VoteCast): void {
-  const proposal = getLatestProposalValues(
+  const droposal = getLatestDroposalValues(
     event.params.proposalId.toString(),
-    event.address
+    event.address,
+    event.block.number
   );
 
   // Proposal will be updated as part of handler
-  _handleVoteCast(
-    proposal,
+  _handleDroposalVoteCast(
+    droposal,
     event.params.voter.toHexString(),
     event.params.weight,
     event.params.reason,
@@ -85,66 +96,26 @@ export function handleVoteCast(event: VoteCast): void {
   );
 }
 
-function getLatestProposalValues(
-  proposalId: string,
-  contractAddress: Address
-): Proposal {
-  const proposal = getProposal(proposalId);
-
-  // On first vote, set state and quorum values
-  if (proposal.state == ProposalState.PENDING) {
-    proposal.state = ProposalState.ACTIVE;
-    proposal.quorumVotes = getQuorumFromContract(
-      contractAddress,
-      proposal.startBlock
-    );
-
-    const governance = getGovernance();
-    proposal.tokenHoldersAtStart = governance.currentTokenHolders;
-    proposal.delegatesAtStart = governance.currentDelegates;
-  }
-  return proposal;
-}
-
-function getGovernanceFramework(contractAddress: string): GovernanceFramework {
-  let governanceFramework = GovernanceFramework.load(contractAddress);
-
-  if (!governanceFramework) {
-    governanceFramework = new GovernanceFramework(contractAddress);
-    const contract = NounsAgoraGovernorSepolia.bind(
-      Address.fromString(contractAddress)
-    );
-
-    governanceFramework.name = "nouns-agora-governance";
-    governanceFramework.type = GovernanceFrameworkType.OPENZEPPELIN_GOVERNOR;
-    governanceFramework.version = contract.version();
-
-    governanceFramework.contractAddress = contractAddress;
-    governanceFramework.tokenAddress = contract.token().toHexString();
-
-    governanceFramework.votingDelay = contract.votingDelay();
-    governanceFramework.votingPeriod = contract.votingPeriod();
-    governanceFramework.proposalThreshold = contract.proposalThreshold();
-  }
-
-  return governanceFramework;
-}
-
-function getQuorumFromContract(
+function getLatestDroposalValues(
+  droposalId: string,
   contractAddress: Address,
   blockNumber: BigInt
-): BigInt {
+): Droposal {
+  const droposal = getDroposal(droposalId);
+
+  // Pull quorum from the NounsAgoraGovernor
   const contract = NounsAgoraGovernorSepolia.bind(contractAddress);
   const quorumVotes = contract.quorum(blockNumber);
 
-  const governanceFramework = getGovernanceFramework(
-    contractAddress.toHexString()
-  );
-  governanceFramework.quorumVotes = quorumVotes;
-  governanceFramework.save();
-
-  return quorumVotes;
+  // On first vote, set state and quorum values
+  if (droposal.state == DroposalState.PENDING) {
+    droposal.state = DroposalState.ACTIVE;
+    droposal.quorumVotes = quorumVotes;
+  }
+  return droposal;
 }
+
+// TODO keep or remove the autogenerated code form the NounsAgoraGovernor ABI
 
 // export function handleDroposalTypeProposed(
 //   event: DroposalTypeProposedEvent
@@ -178,19 +149,6 @@ function getQuorumFromContract(
 //   entity.config_publicSaleDuration = event.params.config.publicSaleDuration;
 //   entity.config_fundsRecipientSplit = event.params.config.fundsRecipientSplit;
 //   entity.config_minter = event.params.config.minter;
-
-//   entity.blockNumber = event.block.number;
-//   entity.blockTimestamp = event.block.timestamp;
-//   entity.transactionHash = event.transaction.hash;
-
-//   entity.save();
-// }
-
-// export function handleInitialized(event: InitializedEvent): void {
-//   let entity = new Initialized(
-//     event.transaction.hash.concatI32(event.logIndex.toI32())
-//   );
-//   entity.version = event.params.version;
 
 //   entity.blockNumber = event.block.number;
 //   entity.blockTimestamp = event.block.timestamp;
