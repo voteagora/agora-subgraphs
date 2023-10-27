@@ -43,7 +43,7 @@ export function handleInitialized(event: Initialized): void {
   );
   premiumDroposalType.name = "Premium";
   premiumDroposalType.editionSize = BigInt.fromI32(3000);
-  standardDroposalType.publicSalePrice = BigInt.fromString(
+  premiumDroposalType.publicSalePrice = BigInt.fromString(
     "69000000000000000"
   ).toBigDecimal();
   premiumDroposalType.publicSaleDuration = 2 * 24 * 60 * 60;
