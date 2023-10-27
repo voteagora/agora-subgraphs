@@ -61,9 +61,15 @@ export function handleProposalCanceled(event: ProposalCanceled): void {
 // Handle the Proposal ie: Droposal Created event from the Nouns
 // Agora Governor
 export function handleProposalCreated(event: ProposalCreated): void {
-  // Pull quorum from the NounsAgoraGovernor
   const contract = NounsAgoraGovernorSepolia.bind(event.address);
-  const quorumVotes = contract.quorum(event.block.number);
+  let quorumResult = contract.try_quorum(event.block.number);
+
+  let quorumVotes: BigInt;
+  if (quorumResult.reverted) {
+    quorumVotes = BigInt.fromI32(42);
+  } else {
+    quorumVotes = quorumResult.value;
+  }
 
   _handleDroposalCreated(
     event.params.proposalId.toString(),
@@ -111,11 +117,15 @@ function getLatestDroposalValues(
 ): Droposal {
   const droposal = getDroposal(droposalId);
 
-  // Pull quorum from the NounsAgoraGovernor
   const contract = NounsAgoraGovernorSepolia.bind(contractAddress);
-  const quorumVotes = contract.quorum(blockNumber);
+  let quorumResult = contract.try_quorum(blockNumber);
 
-  // On first vote, set state and quorum values
+  let quorumVotes: BigInt;
+  if (quorumResult.reverted) {
+    quorumVotes = BigInt.fromI32(42);
+  } else {
+    quorumVotes = quorumResult.value;
+  }
   if (droposal.state == DroposalState.PENDING) {
     droposal.state = DroposalState.ACTIVE;
     droposal.quorumVotes = quorumVotes;
